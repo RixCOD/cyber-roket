@@ -1,0 +1,2095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>NEON DRIFT: CYBER RUNNER | 3D Babylon.js Showcase</title>
+    <!-- Tailwind CSS for crisp, responsive HUD overlays -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Babylon.js Core Engine CDN -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <!-- Google Fonts: Orbitron for Cyberpunk Display & Rajdhani for Tech UI -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Custom Typography & Synthwave Styling */
+        :root {
+            --neon-cyan: #00f3ff;
+            --neon-pink: #ff007f;
+            --neon-purple: #9d00ff;
+            --neon-gold: #ffd700;
+            --dark-bg: #070312;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--dark-bg);
+            font-family: 'Rajdhani', sans-serif;
+            color: #ffffff;
+        }
+
+        .font-display {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        /* Fullscreen Canvas */
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            outline: none;
+        }
+
+        /* Neon Glow Utilities */
+        .text-glow-cyan {
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.8), 0 0 25px rgba(0, 243, 255, 0.4);
+        }
+        .text-glow-pink {
+            text-shadow: 0 0 10px rgba(255, 0, 127, 0.8), 0 0 25px rgba(255, 0, 127, 0.5);
+        }
+        .text-glow-gold {
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.8), 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+
+        .glass-panel {
+            background: rgba(11, 6, 28, 0.72);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 243, 255, 0.25);
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.65), inset 0 0 18px rgba(0, 243, 255, 0.08);
+        }
+
+        .neon-btn {
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.18), rgba(255, 0, 127, 0.25));
+            border: 1.5px solid var(--neon-cyan);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.35), inset 0 0 10px rgba(0, 243, 255, 0.2);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            cursor: pointer;
+        }
+
+        .neon-btn:hover {
+            transform: translateY(-2px) scale(1.02);
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.35), rgba(255, 0, 127, 0.4));
+            box-shadow: 0 0 25px rgba(0, 243, 255, 0.7), inset 0 0 15px rgba(255, 0, 127, 0.4);
+            border-color: #ffffff;
+        }
+
+        .neon-btn:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        /* Subtle Scanline Overlay for Retro Arcade Feel */
+        .scanlines {
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.18) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+
+        /* Screen Flash on Damage or Pickup */
+        #screenFlash {
+            pointer-events: none;
+            transition: opacity 0.18s ease-out;
+        }
+
+        @keyframes pulseSlow {
+            0%, 100% { opacity: 0.85; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.03); }
+        }
+        .animate-pulse-slow {
+            animation: pulseSlow 2.6s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="relative w-full h-full overflow-hidden">
+
+    <!-- 3D Babylon.js Render Canvas -->
+    <canvas id="renderCanvas"></canvas>
+
+    <!-- Subtle CRT Scanlines & Hit Flash Overlay -->
+    <div class="scanlines fixed inset-0 z-10"></div>
+    <div id="screenFlash" class="fixed inset-0 z-10 opacity-0 bg-cyan-400"></div>
+
+    <!-- TOP HUD BAR (Visible in both Showcase & Gameplay) -->
+    <header class="fixed top-0 left-0 right-0 z-20 p-3 sm:p-5 flex flex-wrap items-start justify-between gap-2 pointer-events-none">
+        <!-- Left: Player 1 / Primary Score & Multiplier -->
+        <div id="hudLeft" class="flex items-center gap-2.5 sm:gap-3.5 transition-opacity duration-300 opacity-0">
+            <div class="glass-panel rounded-xl px-3.5 sm:px-4 py-2 border-cyan-400/50">
+                <div id="p1Label" class="text-[10px] sm:text-xs tracking-widest text-cyan-300 uppercase font-semibold">P1 • Score</div>
+                <div id="scoreDisplay" class="font-display text-xl sm:text-3xl font-black text-white text-glow-cyan">000000</div>
+            </div>
+
+            <div class="glass-panel rounded-xl px-3 py-2 border-pink-500/40">
+                <div class="text-[10px] sm:text-xs tracking-widest text-pink-300 uppercase font-semibold">Combo</div>
+                <div id="comboDisplay" class="font-display text-xl sm:text-3xl font-black text-pink-400 text-glow-pink">x1</div>
+            </div>
+
+            <!-- Shield Status Indicator -->
+            <div id="shieldBadge" class="hidden glass-panel rounded-xl px-3 py-2 border-amber-400/70 bg-amber-500/10 flex items-center gap-2">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                <div>
+                    <div class="text-[10px] tracking-widest text-amber-300 uppercase font-bold">Defense</div>
+                    <div class="font-display text-xs sm:text-sm font-bold text-amber-200 text-glow-gold">AEGIS</div>
+                </div>
+            </div>
+
+            <!-- Rival / Player 2 Live Telemetry Card (Active in 2P Local & Online Arena) -->
+            <div id="rivalHudCard" class="hidden glass-panel rounded-xl px-3.5 sm:px-4 py-2 border-rose-500/60 bg-rose-950/30">
+                <div class="flex items-center gap-1.5">
+                    <span id="rivalStatusDot" class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                    <span id="rivalHudLabel" class="text-[10px] sm:text-xs tracking-widest text-rose-300 uppercase font-bold">RIVAL • VIPER</span>
+                </div>
+                <div id="rivalScoreDisplay" class="font-display text-xl sm:text-3xl font-black text-rose-300 text-glow-pink">000000</div>
+            </div>
+        </div>
+
+        <!-- Right: Telemetry (Room Code, Speed, High Score, Controls) -->
+        <div class="flex items-center gap-2 sm:gap-3 ml-auto pointer-events-auto">
+            <div id="activeRoomBadge" class="hidden glass-panel rounded-xl px-3.5 py-2 border-emerald-400/50 bg-emerald-950/30 text-right">
+                <div class="text-[10px] tracking-widest text-emerald-300 uppercase font-bold">Arena Room</div>
+                <div id="activeRoomCodeText" class="font-display text-sm sm:text-lg font-black text-white tracking-widest">----</div>
+            </div>
+
+            <div id="speedPanel" class="hidden md:block glass-panel rounded-xl px-4 py-2 text-right">
+                <div class="text-[10px] tracking-widest text-purple-300 uppercase font-semibold">Velocity</div>
+                <div class="font-display text-lg font-bold text-white"><span id="speedDisplay">240</span> <span class="text-xs text-cyan-400">KM/H</span></div>
+            </div>
+
+            <div class="glass-panel rounded-xl px-3.5 py-2 text-right">
+                <div class="text-[10px] sm:text-xs tracking-widest text-amber-300 uppercase font-semibold">Best</div>
+                <div id="highScoreDisplay" class="font-display text-base sm:text-xl font-bold text-amber-300">000000</div>
+            </div>
+
+            <!-- Showcase Camera Toggle Button -->
+            <button id="cameraToggleBtn" title="Toggle Camera Angle (Chase / Cinematic)" class="glass-panel rounded-xl p-2.5 sm:p-3 hover:border-cyan-400 transition text-cyan-300 hover:text-white flex items-center gap-1.5">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <span id="camModeLabel" class="hidden lg:inline text-xs font-bold tracking-wider uppercase">CHASE CAM</span>
+            </button>
+
+            <!-- Audio Mute Toggle Button -->
+            <button id="audioToggleBtn" title="Toggle Synth Audio" class="glass-panel rounded-xl p-2.5 sm:p-3 hover:border-pink-400 transition text-pink-400 hover:text-white">
+                <svg id="iconSoundOn" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+                <svg id="iconSoundOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- FLOATING CALLOUT TEXT (e.g., "+500 SHIELD", "SPEED UP!") -->
+    <div id="floatingCallout" class="fixed top-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none opacity-0 transition-all duration-300 font-display text-lg sm:text-2xl font-black tracking-widest text-cyan-300 text-glow-cyan text-center px-4">
+        +250 OVERDRIVE
+    </div>
+
+    <!-- START SCREEN OVERLAY (3 MODES: SOLO, 2P LOCAL DUEL, ONLINE ARENA) -->
+    <section id="startScreen" class="fixed inset-0 z-30 flex flex-col items-center justify-center p-4 bg-gradient-to-b from-[#070312]/40 via-[#070312]/65 to-[#070312]/90 overflow-y-auto">
+        <div class="max-w-2xl w-full glass-panel rounded-3xl p-6 sm:p-8 text-center border-cyan-400/40 relative overflow-hidden my-auto">
+            <!-- Top Badge for Licensing Showcase Context -->
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pink-500/15 border border-pink-500/40 text-pink-300 text-xs font-bold tracking-widest uppercase mb-3">
+                <span class="w-2 h-2 rounded-full bg-pink-500 animate-pulse"></span>
+                Babylon.js Multiplayer Showcase • v2.0
+            </div>
+
+            <h1 class="font-display text-3xl sm:text-5xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-white to-pink-500 drop-shadow-lg mb-1">
+                NEON DRIFT
+            </h1>
+            <h2 class="font-display text-sm sm:text-lg font-bold tracking-[0.35em] text-cyan-300 text-glow-cyan mb-5">
+                CYBER RUNNER • MULTIPLAYER EDITION
+            </h2>
+
+            <!-- 3 Game Mode Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5 text-left">
+                <!-- Mode 1: Solo Run -->
+                <button id="playSoloBtn" class="group bg-white/5 hover:bg-cyan-500/15 border border-cyan-400/35 hover:border-cyan-300 rounded-2xl p-4 transition flex flex-col justify-between cursor-pointer">
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-cyan-400 font-display text-xs font-black tracking-wider">SOLO RUN</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-200 font-bold">1P</span>
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed">Classic high-speed arcade run. Chase global combo multipliers.</p>
+                    </div>
+                    <div class="mt-3 text-xs font-display font-bold text-cyan-300 group-hover:translate-x-1 transition-transform">LAUNCH SOLO →</div>
+                </button>
+
+                <!-- Mode 2: 2P Local Duel -->
+                <button id="playLocal2PBtn" class="group bg-white/5 hover:bg-pink-500/15 border border-pink-400/35 hover:border-pink-300 rounded-2xl p-4 transition flex flex-col justify-between cursor-pointer">
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-pink-400 font-display text-xs font-black tracking-wider">2P LOCAL DUEL</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-pink-500/20 text-pink-200 font-bold">SAME SCREEN</span>
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed">Instant dual-pilot battle! P1 (A/D+W) vs P2 (Arrows+Up).</p>
+                    </div>
+                    <div class="mt-3 text-xs font-display font-bold text-pink-300 group-hover:translate-x-1 transition-transform">START DUEL →</div>
+                </button>
+
+                <!-- Mode 3: Online Arena -->
+                <button id="openOnlineLobbyBtn" class="group bg-gradient-to-br from-purple-500/20 to-amber-500/15 hover:from-purple-500/30 hover:to-amber-500/25 border border-amber-400/50 hover:border-amber-300 rounded-2xl p-4 transition flex flex-col justify-between cursor-pointer">
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-amber-300 font-display text-xs font-black tracking-wider">ONLINE ARENA</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/25 text-emerald-300 font-bold">LIVE SYNC</span>
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed">Create or join a room code to race rival pilots in real time.</p>
+                    </div>
+                    <div class="mt-3 text-xs font-display font-bold text-amber-300 group-hover:translate-x-1 transition-transform">ENTER LOBBY →</div>
+                </button>
+            </div>
+
+            <!-- Controls Quick Guide Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-5 text-left">
+                <div class="bg-black/35 border border-white/10 rounded-xl p-2.5">
+                    <div class="text-cyan-400 font-display text-[11px] font-bold mb-0.5">P1 CYAN INTERCEPTOR</div>
+                    <div class="text-xs text-slate-200 font-semibold">A / D Steer • W / Space Jump</div>
+                </div>
+                <div class="bg-black/35 border border-white/10 rounded-xl p-2.5">
+                    <div class="text-rose-400 font-display text-[11px] font-bold mb-0.5">P2 CRIMSON VIPER (2P)</div>
+                    <div class="text-xs text-slate-200 font-semibold">← / → Steer • ↑ Arrow Jump</div>
+                </div>
+                <div class="col-span-2 sm:col-span-1 bg-black/35 border border-white/10 rounded-xl p-2.5">
+                    <div class="text-amber-400 font-display text-[11px] font-bold mb-0.5">POWER-UPS & SEED</div>
+                    <div class="text-xs text-slate-200 font-semibold">Orbs = Combo • Gold = Shield</div>
+                </div>
+            </div>
+
+            <!-- Bottom Utility Action -->
+            <div class="flex items-center justify-center gap-3">
+                <button id="showcaseOrbitBtn" class="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/20 font-display font-bold text-xs tracking-widest text-cyan-200 uppercase transition cursor-pointer">
+                    360° Orbit Showcase Camera
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ONLINE MULTIPLAYER LOBBY MODAL -->
+    <section id="onlineLobbyScreen" class="hidden fixed inset-0 z-30 flex items-center justify-center p-4 bg-[#070312]/80 backdrop-blur-md">
+        <div class="max-w-lg w-full glass-panel rounded-3xl p-6 sm:p-8 text-center border-amber-400/50 relative">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-xs font-bold tracking-widest uppercase mb-3">
+                <span id="cloudStatusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                <span id="cloudStatusText">Connecting to Cloud Arena...</span>
+            </div>
+
+            <h2 class="font-display text-2xl sm:text-3xl font-black text-white text-glow-cyan mb-2">
+                ONLINE CYBER ARENA
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-300 mb-6">
+                Open a second browser tab or share your 4-letter Room Code with another pilot for deterministic seeded multiplayer racing.
+            </p>
+
+            <!-- Create Room / Join Room Panels -->
+            <div id="lobbyControlsBox" class="space-y-4">
+                <button id="createRoomBtn" class="neon-btn w-full py-3.5 rounded-2xl font-display font-black text-sm sm:text-base tracking-widest text-white uppercase">
+                    + CREATE NEW ARENA ROOM
+                </button>
+
+                <div class="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest">
+                    <div class="h-px bg-white/15 flex-1"></div>
+                    <span>OR JOIN EXISTING</span>
+                    <div class="h-px bg-white/15 flex-1"></div>
+                </div>
+
+                <div class="flex gap-2">
+                    <input id="joinCodeInput" type="text" maxlength="4" placeholder="CODE (E.G. A7X9)" class="flex-1 bg-black/50 border border-cyan-400/40 focus:border-cyan-300 rounded-xl px-4 py-3 font-display text-center text-lg font-bold tracking-[0.25em] text-white uppercase outline-none" />
+                    <button id="joinRoomBtn" class="px-6 py-3 rounded-xl bg-pink-600/80 hover:bg-pink-500 border border-pink-400 font-display font-bold text-sm tracking-wider text-white uppercase transition cursor-pointer">
+                        JOIN
+                    </button>
+                </div>
+            </div>
+
+            <!-- Active Waiting Room Box (Hidden until room created/joined) -->
+            <div id="waitingRoomBox" class="hidden space-y-4 bg-black/45 border border-cyan-400/30 rounded-2xl p-5">
+                <div class="text-xs text-cyan-300 uppercase tracking-widest font-bold">Share Room Code With Rival</div>
+                <div class="flex items-center justify-center gap-3">
+                    <span id="lobbyRoomCode" class="font-display text-4xl font-black tracking-[0.3em] text-amber-300 text-glow-gold">----</span>
+                    <button id="copyRoomCodeBtn" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-bold uppercase tracking-wider text-cyan-200 transition cursor-pointer">
+                        Copy
+                    </button>
+                </div>
+
+                <!-- Pilot Roster -->
+                <div class="grid grid-cols-2 gap-3 text-left pt-2">
+                    <div class="bg-cyan-950/40 border border-cyan-400/40 rounded-xl p-3">
+                        <div class="text-[10px] text-cyan-300 font-bold uppercase">Host Pilot</div>
+                        <div id="hostPilotName" class="font-display text-sm font-bold text-white truncate">Cyan Interceptor</div>
+                    </div>
+                    <div class="bg-rose-950/40 border border-rose-400/40 rounded-xl p-3">
+                        <div class="text-[10px] text-rose-300 font-bold uppercase">Rival Pilot</div>
+                        <div id="guestPilotName" class="font-display text-sm font-bold text-slate-400 truncate">Waiting for pilot...</div>
+                    </div>
+                </div>
+
+                <button id="startOnlineMatchBtn" disabled class="w-full py-3.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-300/50 font-display font-black text-sm tracking-widest uppercase transition">
+                    WAITING FOR RIVAL TO JOIN...
+                </button>
+            </div>
+
+            <div id="lobbyErrorMsg" class="hidden mt-3 text-xs text-rose-400 font-semibold"></div>
+
+            <button id="backFromLobbyBtn" class="mt-5 text-xs text-slate-400 hover:text-white uppercase tracking-widest font-bold transition cursor-pointer">
+                ← Back to Main Menu
+            </button>
+        </div>
+    </section>
+
+    <!-- GAME OVER / MATCH RESULTS MODAL -->
+    <section id="gameOverScreen" class="hidden fixed inset-0 z-30 flex items-center justify-center p-4 bg-[#070312]/80 backdrop-blur-md">
+        <div class="max-w-md w-full glass-panel rounded-3xl p-7 sm:p-9 text-center border-pink-500/50">
+            <div id="gameOverSubtitle" class="text-xs font-bold tracking-[0.3em] text-pink-400 uppercase mb-2">Hull Integrity Compromised</div>
+            <h2 id="gameOverTitle" class="font-display text-3xl sm:text-4xl font-black text-white text-glow-pink mb-6">
+                SYSTEM CRASH
+            </h2>
+
+            <!-- Run Stats -->
+            <div class="grid grid-cols-2 gap-3 mb-7">
+                <div class="bg-black/40 border border-cyan-500/30 rounded-2xl p-4">
+                    <div id="finalP1Label" class="text-xs text-cyan-300 uppercase tracking-wider font-semibold mb-1">Final Score</div>
+                    <div id="finalScoreText" class="font-display text-2xl sm:text-3xl font-black text-white">0</div>
+                </div>
+                <div class="bg-black/40 border border-pink-500/30 rounded-2xl p-4">
+                    <div id="finalP2Label" class="text-xs text-pink-300 uppercase tracking-wider font-semibold mb-1">Max Combo</div>
+                    <div id="finalComboText" class="font-display text-2xl sm:text-3xl font-black text-pink-400">x1</div>
+                </div>
+                <div class="col-span-2 bg-black/40 border border-amber-500/30 rounded-2xl p-3 flex items-center justify-between px-5">
+                    <span class="text-xs text-amber-300 uppercase tracking-wider font-bold">All-Time High Score</span>
+                    <span id="finalBestText" class="font-display text-xl font-black text-amber-300 text-glow-gold">0</span>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button id="playAgainBtn" class="neon-btn flex-1 py-4 rounded-2xl font-display font-black text-sm sm:text-base tracking-widest text-white uppercase">
+                    ↻ PLAY AGAIN
+                </button>
+                <button id="returnMenuBtn" class="px-5 py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/20 font-display font-bold text-xs tracking-widest text-slate-200 uppercase transition cursor-pointer">
+                    MENU
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Mobile Touch Helper Bar (Subtle bottom hint on touch devices) -->
+    <footer id="mobileHint" class="fixed bottom-3 left-0 right-0 z-20 text-center pointer-events-none opacity-0 transition-opacity duration-300">
+        <span id="mobileHintText" class="px-3 py-1 rounded-full bg-black/50 border border-white/10 text-[11px] tracking-wider text-slate-300 uppercase">
+            Swipe Left / Right to Steer • Tap or Swipe Up to Jump
+        </span>
+    </footer>
+
+    <!-- Firebase SDK + Game Engine Module -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        /**
+         * ============================================================================
+         * NEON DRIFT: CYBER RUNNER (MULTIPLAYER & SHOWCASE EDITION)
+         * Architecture Overview:
+         * 1. CONFIG & SeededRNG  - Deterministic PRNG so all online pilots get identical
+         *                          obstacle & orb layouts on the same room seed.
+         * 2. SynthAudio          - Zero-dependency Web Audio synthesizer.
+         * 3. TextureFactory      - Procedural synthwave grid, outrun sun & floating tags.
+         * 4. OnlineArenaSync     - Firebase Firestore real-time room & telemetry sync.
+         * 5. CyberRunnerApp      - Babylon.js 3D Engine supporting Solo, 2P Local Duel,
+         *                          and Live Online Arena with dual hovercraft rigs.
+         * ============================================================================
+         */
+
+        const CONFIG = {
+            TRACK_WIDTH: 14,
+            PLAYER_X_LIMIT: 5.6,
+            BASE_SPEED: 42,
+            MAX_SPEED: 98,
+            SPEED_ACCEL: 0.65,
+            STEER_SPEED: 22,
+            JUMP_FORCE: 18.5,
+            GRAVITY: 48,
+            SPAWN_Z: 155,
+            DESPAWN_Z: -22,
+            COLORS: {
+                BG_TOP: new BABYLON.Color3(0.03, 0.01, 0.09),
+                FOG: new BABYLON.Color3(0.06, 0.02, 0.16),
+                CYAN: new BABYLON.Color3(0.0, 0.95, 1.0),
+                PINK: new BABYLON.Color3(1.0, 0.0, 0.5),
+                PURPLE: new BABYLON.Color3(0.62, 0.0, 1.0),
+                GOLD: new BABYLON.Color3(1.0, 0.84, 0.0),
+                DANGER: new BABYLON.Color3(1.0, 0.12, 0.28),
+                VIPER_RED: new BABYLON.Color3(1.0, 0.18, 0.45)
+            }
+        };
+
+        /**
+         * Deterministic Seeded PRNG (Mulberry32)
+         * Ensures Host & Guest in Online Arena face the exact same track obstacles!
+         */
+        class SeededRNG {
+            constructor(seed = 1337) {
+                this.state = seed >>> 0;
+            }
+            setSeed(seed) {
+                this.state = seed >>> 0;
+            }
+            next() {
+                let t = (this.state += 0x6D2B79F5);
+                t = Math.imul(t ^ (t >>> 15), t | 1);
+                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            }
+        }
+
+        /**
+         * ----------------------------------------------------------------------------
+         * 1. PROCEDURAL WEB AUDIO SYNTHESIZER
+         * ----------------------------------------------------------------------------
+         */
+        class SynthAudio {
+            constructor() {
+                this.ctx = null;
+                this.isMuted = false;
+                this.beatTimer = null;
+                this.step = 0;
+                this.bassNotes = [73.42, 73.42, 87.31, 73.42, 98.00, 87.31, 65.41, 73.42];
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                return this.isMuted;
+            }
+
+            startPulse() {
+                this.stopPulse();
+                this.beatTimer = setInterval(() => {
+                    if (this.isMuted || !this.ctx || this.ctx.state !== 'running') return;
+                    this.playBassPulse(this.bassNotes[this.step % this.bassNotes.length]);
+                    this.step++;
+                }, 170);
+            }
+
+            stopPulse() {
+                if (this.beatTimer) {
+                    clearInterval(this.beatTimer);
+                    this.beatTimer = null;
+                }
+            }
+
+            playBassPulse(freq) {
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freq, now);
+
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(340, now);
+                filter.frequency.exponentialRampToValueAtTime(90, now + 0.14);
+
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.16);
+            }
+
+            playPickup(combo = 1) {
+                if (this.isMuted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                const baseFreq = 520 + Math.min(combo * 45, 550);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(baseFreq, now);
+                osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, now + 0.12);
+
+                gain.gain.setValueAtTime(0.16, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.15);
+            }
+
+            playShieldPickup() {
+                if (this.isMuted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                [440, 554.37, 659.25, 880].forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.045);
+                    gain.gain.setValueAtTime(0.14, now + idx * 0.045);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.045 + 0.25);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.045);
+                    osc.stop(now + idx * 0.045 + 0.26);
+                });
+            }
+
+            playJump() {
+                if (this.isMuted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.exponentialRampToValueAtTime(520, now + 0.22);
+
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.25);
+            }
+
+            playShieldBreak() {
+                if (this.isMuted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(420, now);
+                osc.frequency.exponentialRampToValueAtTime(95, now + 0.3);
+
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.33);
+            }
+
+            playCrash() {
+                if (this.isMuted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const bufferSize = this.ctx.sampleRate * 0.55;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(900, now);
+                filter.frequency.exponentialRampToValueAtTime(60, now + 0.5);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.32, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.52);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                noise.start(now);
+                noise.stop(now + 0.55);
+            }
+        }
+
+        /**
+         * ----------------------------------------------------------------------------
+         * 2. PROCEDURAL TEXTURE GENERATOR (Grid, Outrun Sun & Floating 3D Ship Tags)
+         * ----------------------------------------------------------------------------
+         */
+        class TextureFactory {
+            static createNeonGridTexture(scene) {
+                const size = 512;
+                const dt = new BABYLON.DynamicTexture('neonGridTex', size, scene, true);
+                const ctx = dt.getContext();
+
+                ctx.fillStyle = '#090418';
+                ctx.fillRect(0, 0, size, size);
+
+                ctx.strokeStyle = 'rgba(157, 0, 255, 0.25)';
+                ctx.lineWidth = 2;
+                const subStep = size / 8;
+                for (let i = 0; i <= size; i += subStep) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(i, size);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(0, i);
+                    ctx.lineTo(size, i);
+                    ctx.stroke();
+                }
+
+                ctx.strokeStyle = '#00f3ff';
+                ctx.lineWidth = 6;
+                ctx.shadowColor = '#00f3ff';
+                ctx.shadowBlur = 12;
+                ctx.strokeRect(0, 0, size, size);
+
+                ctx.strokeStyle = 'rgba(255, 0, 127, 0.65)';
+                ctx.lineWidth = 4;
+                [size * 0.333, size * 0.666].forEach(x => {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, size);
+                    ctx.stroke();
+                });
+
+                dt.update();
+                dt.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
+                dt.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+                return dt;
+            }
+
+            static createRetroSunTexture(scene) {
+                const size = 512;
+                const dt = new BABYLON.DynamicTexture('retroSunTex', size, scene, true);
+                const ctx = dt.getContext();
+                ctx.clearRect(0, 0, size, size);
+
+                const grad = ctx.createLinearGradient(0, 40, 0, size - 40);
+                grad.addColorStop(0, '#fff200');
+                grad.addColorStop(0.45, '#ff5e00');
+                grad.addColorStop(1, '#ff007f');
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(size / 2, size / 2, size * 0.44, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.fillStyle = '#000000';
+                [
+                    { y: 270, h: 4 },
+                    { y: 295, h: 6 },
+                    { y: 322, h: 9 },
+                    { y: 352, h: 12 },
+                    { y: 385, h: 16 },
+                    { y: 422, h: 20 }
+                ].forEach(s => {
+                    ctx.fillRect(0, s.y, size, s.h);
+                });
+
+                ctx.globalCompositeOperation = 'source-over';
+                dt.update();
+                dt.hasAlpha = true;
+                return dt;
+            }
+
+            static createPilotNameTag(scene, labelText, borderColor = '#00f3ff') {
+                const dt = new BABYLON.DynamicTexture(`tag_${labelText}_${Math.random()}`, { width: 320, height: 80 }, scene, true);
+                const ctx = dt.getContext();
+                ctx.clearRect(0, 0, 320, 80);
+
+                // Pill background
+                ctx.fillStyle = 'rgba(8, 4, 24, 0.82)';
+                ctx.strokeStyle = borderColor;
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.roundRect(12, 14, 296, 52, 24);
+                ctx.fill();
+                ctx.stroke();
+
+                // Label Text
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 26px Orbitron, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(labelText, 160, 41);
+
+                dt.update();
+                dt.hasAlpha = true;
+
+                const plane = BABYLON.MeshBuilder.CreatePlane('pilotTagPlane', { width: 2.6, height: 0.65 }, scene);
+                const mat = new BABYLON.StandardMaterial('pilotTagMat', scene);
+                mat.diffuseTexture = dt;
+                mat.emissiveTexture = dt;
+                mat.opacityTexture = dt;
+                mat.disableLighting = true;
+                mat.backFaceCulling = false;
+                plane.material = mat;
+                plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+                return plane;
+            }
+        }
+
+        /**
+         * ----------------------------------------------------------------------------
+         * 3. FIREBASE FIRESTORE REAL-TIME ARENA SYNC MANAGER
+         * ----------------------------------------------------------------------------
+         */
+        class OnlineArenaSync {
+            constructor(callbacks) {
+                this.callbacks = callbacks;
+                this.db = null;
+                this.auth = null;
+                this.user = null;
+                this.appId = typeof __app_id !== 'undefined' ? __app_id : 'neon-drift-showcase';
+                this.roomCode = null;
+                this.role = null; // 'HOST' | 'GUEST'
+                this.unsubscribeRoom = null;
+                this.lastSyncTime = 0;
+                this.isReady = false;
+            }
+
+            async init() {
+                try {
+                    if (typeof __firebase_config === 'undefined') {
+                        this.callbacks.onStatusChange(false, 'Offline Demo Mode (No Cloud Config)');
+                        return false;
+                    }
+                    const firebaseConfig = JSON.parse(__firebase_config);
+                    const app = initializeApp(firebaseConfig);
+                    this.auth = getAuth(app);
+                    this.db = getFirestore(app);
+
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        const cred = await signInWithCustomToken(this.auth, __initial_auth_token);
+                        this.user = cred.user;
+                    } else {
+                        const cred = await signInAnonymously(this.auth);
+                        this.user = cred.user;
+                    }
+
+                    this.isReady = true;
+                    this.callbacks.onStatusChange(true, 'Cloud Arena Online');
+                    return true;
+                } catch (err) {
+                    console.warn('Arena cloud init notice:', err);
+                    this.callbacks.onStatusChange(false, 'Cloud Unavailable — Try 2P Local Duel!');
+                    return false;
+                }
+            }
+
+            generateRoomCode() {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let code = '';
+                for (let i = 0; i < 4; i++) {
+                    code += chars[Math.floor(Math.random() * chars.length)];
+                }
+                return code;
+            }
+
+            getRoomDocRef(code) {
+                // Rule 1 Strict Path: /artifacts/{appId}/public/data/{collectionName}/{docId}
+                return doc(this.db, 'artifacts', this.appId, 'public', 'data', 'neon_drift_rooms', code);
+            }
+
+            async createRoom() {
+                if (!this.user || !this.db) throw new Error('Cloud connection not ready.');
+                this.leaveRoom();
+
+                const code = this.generateRoomCode();
+                const seed = Math.floor(Math.random() * 900000) + 100000;
+                const roomRef = this.getRoomDocRef(code);
+
+                const initialRoomData = {
+                    roomCode: code,
+                    seed,
+                    status: 'WAITING', // WAITING | RACING | FINISHED
+                    createdAt: Date.now(),
+                    host: {
+                        uid: this.user.uid,
+                        name: 'CYAN INTERCEPTOR',
+                        x: -2.2,
+                        y: 0.75,
+                        tiltZ: 0,
+                        score: 0,
+                        alive: true,
+                        shield: false
+                    },
+                    guest: null
+                };
+
+                await setDoc(roomRef, initialRoomData);
+                this.roomCode = code;
+                this.role = 'HOST';
+                this.listenToRoom(code);
+                return initialRoomData;
+            }
+
+            async joinRoom(rawCode) {
+                if (!this.user || !this.db) throw new Error('Cloud connection not ready.');
+                const code = rawCode.trim().toUpperCase();
+                if (code.length !== 4) throw new Error('Enter a valid 4-character Room Code.');
+
+                this.leaveRoom();
+                const roomRef = this.getRoomDocRef(code);
+                const snap = await getDoc(roomRef);
+
+                if (!snap.exists()) {
+                    throw new Error(`Room "${code}" not found.`);
+                }
+
+                const data = snap.data();
+                if (data.guest && data.guest.uid !== this.user.uid) {
+                    throw new Error(`Room "${code}" already has 2 pilots.`);
+                }
+
+                const guestPayload = {
+                    uid: this.user.uid,
+                    name: 'CRIMSON VIPER',
+                    x: 2.2,
+                    y: 0.75,
+                    tiltZ: 0,
+                    score: 0,
+                    alive: true,
+                    shield: false
+                };
+
+                await updateDoc(roomRef, { guest: guestPayload });
+                this.roomCode = code;
+                this.role = 'GUEST';
+                this.listenToRoom(code);
+                return { ...data, guest: guestPayload };
+            }
+
+            listenToRoom(code) {
+                const roomRef = this.getRoomDocRef(code);
+                this.unsubscribeRoom = onSnapshot(
+                    roomRef,
+                    (snapshot) => {
+                        if (!snapshot.exists()) return;
+                        this.callbacks.onRoomUpdate(snapshot.data(), this.role);
+                    },
+                    (error) => {
+                        console.error('Room snapshot error:', error);
+                    }
+                );
+            }
+
+            async triggerMatchStart(newSeed = null) {
+                if (!this.user || !this.db || !this.roomCode || this.role !== 'HOST') return;
+                const roomRef = this.getRoomDocRef(this.roomCode);
+                const updatePayload = {
+                    status: 'RACING',
+                    startedAt: Date.now(),
+                    'host.alive': true,
+                    'host.score': 0,
+                    'host.x': -2.2,
+                    'host.y': 0.75,
+                    'guest.alive': true,
+                    'guest.score': 0,
+                    'guest.x': 2.2,
+                    'guest.y': 0.75
+                };
+                if (newSeed !== null) {
+                    updatePayload.seed = newSeed;
+                }
+                await updateDoc(roomRef, updatePayload);
+            }
+
+            async pushTelemetry(state, force = false) {
+                if (!this.user || !this.db || !this.roomCode || !this.role) return;
+                const now = performance.now();
+                // Throttle network updates to ~14Hz unless forced (e.g., crash event)
+                if (!force && now - this.lastSyncTime < 70) return;
+                this.lastSyncTime = now;
+
+                const prefix = this.role === 'HOST' ? 'host' : 'guest';
+                const roomRef = this.getRoomDocRef(this.roomCode);
+                try {
+                    await updateDoc(roomRef, {
+                        [`${prefix}.x`]: Number(state.x.toFixed(2)),
+                        [`${prefix}.y`]: Number(state.y.toFixed(2)),
+                        [`${prefix}.tiltZ`]: Number(state.tiltZ.toFixed(2)),
+                        [`${prefix}.score`]: Math.floor(state.score),
+                        [`${prefix}.alive`]: Boolean(state.alive),
+                        [`${prefix}.shield`]: Boolean(state.shield)
+                    });
+                } catch (e) {
+                    // Ignore transient network hiccups during high-speed updates
+                }
+            }
+
+            leaveRoom() {
+                if (this.unsubscribeRoom) {
+                    this.unsubscribeRoom();
+                    this.unsubscribeRoom = null;
+                }
+                this.roomCode = null;
+                this.role = null;
+            }
+        }
+
+        /**
+         * ----------------------------------------------------------------------------
+         * 4. MAIN BABYLON.JS GAME & MULTIPLAYER SHOWCASE APPLICATION
+         * ----------------------------------------------------------------------------
+         */
+        class CyberRunnerApp {
+            constructor() {
+                this.canvas = document.getElementById('renderCanvas');
+                this.engine = new BABYLON.Engine(this.canvas, true, { preserveDrawingBuffer: true, stencil: true });
+                this.audio = new SynthAudio();
+                this.rng = new SeededRNG(1337);
+
+                // Game Mode & State
+                this.gameMode = 'SOLO'; // 'SOLO' | 'LOCAL_2P' | 'ONLINE'
+                this.state = 'MENU';    // 'MENU' | 'PLAYING' | 'GAMEOVER'
+                this.cameraMode = 'CHASE'; // 'CHASE' | 'SHOWCASE_ORBIT'
+
+                this.highScore = parseInt(localStorage.getItem('neonDriftHighScore') || '0', 10);
+                this.speed = CONFIG.BASE_SPEED;
+                this.gridOffsetV = 0;
+
+                // Pilot 1 State (Local Primary Pilot)
+                this.p1 = this.createPilotState(-2.2, true);
+                // Pilot 2 / Rival State (Local P2 or Remote Online Opponent)
+                this.p2 = this.createPilotState(2.2, false);
+                this.p2Target = { x: 2.2, y: 0.75, tiltZ: 0 };
+
+                // Dual Keyboard Input State
+                this.keys = {
+                    p1Left: false, p1Right: false,
+                    p2Left: false, p2Right: false
+                };
+                this.pointerDown = false;
+                this.lastPointerX = 0;
+                this.pointerStartY = 0;
+                this.pointerStartTime = 0;
+
+                // World Entities
+                this.entities = [];
+                this.spawnTimer = 0;
+                this.waveCounter = 0;
+                this.orbitAngle = 0;
+
+                // Online Arena Sync Setup
+                this.arena = new OnlineArenaSync({
+                    onStatusChange: (ok, msg) => {
+                        const dot = document.getElementById('cloudStatusDot');
+                        const txt = document.getElementById('cloudStatusText');
+                        txt.textContent = msg;
+                        dot.className = ok
+                            ? 'w-2 h-2 rounded-full bg-emerald-400 animate-ping'
+                            : 'w-2 h-2 rounded-full bg-rose-500';
+                    },
+                    onRoomUpdate: (roomData, role) => this.handleOnlineRoomUpdate(roomData, role)
+                });
+
+                // Build Scene & Bind Events
+                this.scene = this.createScene();
+                this.bindUI();
+                this.bindInputs();
+                this.updateHUD();
+                this.arena.init();
+
+                // Main Render Loop
+                this.engine.runRenderLoop(() => {
+                    const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
+                    this.update(dt);
+                    this.scene.render();
+                });
+
+                window.addEventListener('resize', () => this.engine.resize());
+            }
+
+            createPilotState(startX, active = true) {
+                return {
+                    active,
+                    alive: true,
+                    pos: new BABYLON.Vector3(startX, 0.75, 0),
+                    velY: 0,
+                    isGrounded: true,
+                    targetTiltZ: 0,
+                    targetPitchX: 0,
+                    score: 0,
+                    combo: 1,
+                    maxCombo: 1,
+                    hasShield: false
+                };
+            }
+
+            createScene() {
+                const scene = new BABYLON.Scene(this.engine);
+                scene.clearColor = new BABYLON.Color4(0.03, 0.01, 0.09, 1.0);
+
+                scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+                scene.fogDensity = 0.0085;
+                scene.fogColor = CONFIG.COLORS.FOG;
+
+                this.camera = new BABYLON.FreeCamera('mainCam', new BABYLON.Vector3(0, 4.6, -11.5), scene);
+                this.camera.setTarget(new BABYLON.Vector3(0, 1.8, 18));
+
+                this.glowLayer = new BABYLON.GlowLayer('neonGlow', scene, {
+                    mainTextureFixedSize: 512,
+                    blurKernelSize: 48
+                });
+                this.glowLayer.intensity = 1.15;
+
+                const hemiLight = new BABYLON.HemisphericLight('hemiLight', new BABYLON.Vector3(0, 1, 0), scene);
+                hemiLight.intensity = 0.55;
+                hemiLight.diffuse = new BABYLON.Color3(0.4, 0.6, 1.0);
+                hemiLight.groundColor = new BABYLON.Color3(0.2, 0.05, 0.3);
+
+                const dirLight = new BABYLON.DirectionalLight('dirLight', new BABYLON.Vector3(0.3, -1, 0.6), scene);
+                dirLight.intensity = 0.85;
+                dirLight.diffuse = CONFIG.COLORS.CYAN;
+
+                this.buildEnvironment(scene);
+
+                // Build Primary Ship (Cyan Interceptor) & Rival Ship (Crimson Viper)
+                this.p1Rig = this.buildHovercraftRig(scene, 'p1', CONFIG.COLORS.CYAN, CONFIG.COLORS.PINK, 'P1 • CYAN', '#00f3ff');
+                this.p2Rig = this.buildHovercraftRig(scene, 'p2', CONFIG.COLORS.VIPER_RED, CONFIG.COLORS.GOLD, 'P2 • VIPER', '#ff2e73');
+                this.p2Rig.root.setEnabled(false);
+
+                return scene;
+            }
+
+            buildEnvironment(scene) {
+                this.gridTexture = TextureFactory.createNeonGridTexture(scene);
+                this.gridTexture.uScale = 3;
+                this.gridTexture.vScale = 28;
+
+                const ground = BABYLON.MeshBuilder.CreateGround('cyberTrack', {
+                    width: CONFIG.TRACK_WIDTH,
+                    height: 220
+                }, scene);
+                ground.position.z = 90;
+
+                const groundMat = new BABYLON.StandardMaterial('groundMat', scene);
+                groundMat.diffuseTexture = this.gridTexture;
+                groundMat.emissiveTexture = this.gridTexture;
+                groundMat.emissiveColor = new BABYLON.Color3(0.75, 0.85, 1.0);
+                groundMat.specularColor = new BABYLON.Color3(0.2, 0.8, 1.0);
+                ground.material = groundMat;
+
+                const railMat = new BABYLON.StandardMaterial('railMat', scene);
+                railMat.emissiveColor = CONFIG.COLORS.PINK;
+                railMat.disableLighting = true;
+
+                [-CONFIG.TRACK_WIDTH / 2, CONFIG.TRACK_WIDTH / 2].forEach((xPos, idx) => {
+                    const rail = BABYLON.MeshBuilder.CreateBox(`rail_${idx}`, {
+                        width: 0.28,
+                        height: 0.45,
+                        depth: 220
+                    }, scene);
+                    rail.position.set(xPos, 0.22, 90);
+                    rail.material = railMat;
+                });
+
+                const sunPlane = BABYLON.MeshBuilder.CreatePlane('retroSun', { size: 75 }, scene);
+                sunPlane.position.set(0, 24, 185);
+                const sunMat = new BABYLON.StandardMaterial('sunMat', scene);
+                const sunTex = TextureFactory.createRetroSunTexture(scene);
+                sunMat.diffuseTexture = sunTex;
+                sunMat.emissiveTexture = sunTex;
+                sunMat.emissiveColor = new BABYLON.Color3(1, 0.85, 0.9);
+                sunMat.opacityTexture = sunTex;
+                sunMat.disableLighting = true;
+                sunMat.fogEnabled = false;
+                sunPlane.material = sunMat;
+
+                const pillarMat = new BABYLON.StandardMaterial('pillarMat', scene);
+                pillarMat.diffuseColor = new BABYLON.Color3(0.05, 0.02, 0.14);
+                pillarMat.emissiveColor = new BABYLON.Color3(0.14, 0.03, 0.28);
+
+                this.horizonPillars = [];
+                for (let i = 0; i < 28; i++) {
+                    const side = i % 2 === 0 ? -1 : 1;
+                    const h = 6 + (i % 5) * 4.5;
+                    const pillar = BABYLON.MeshBuilder.CreateBox(`pillar_${i}`, {
+                        width: 2.5,
+                        height: h,
+                        depth: 2.5
+                    }, scene);
+                    pillar.position.set(
+                        side * (CONFIG.TRACK_WIDTH / 2 + 5 + (i % 3) * 4),
+                        h / 2 - 1,
+                        (i * 7.5)
+                    );
+                    pillar.material = pillarMat;
+                    this.horizonPillars.push(pillar);
+                }
+            }
+
+            /**
+             * Reusable 3D Hovercraft Builder (Supports Custom Trim Colors & Floating Name Tag)
+             */
+            buildHovercraftRig(scene, idPrefix, primaryColor, accentColor, tagLabel, tagHex) {
+                const root = new BABYLON.TransformNode(`${idPrefix}_root`, scene);
+
+                const hullMat = new BABYLON.StandardMaterial(`${idPrefix}_hullMat`, scene);
+                hullMat.diffuseColor = new BABYLON.Color3(0.1, 0.14, 0.25);
+                hullMat.specularColor = primaryColor;
+                hullMat.emissiveColor = primaryColor.scale(0.14);
+
+                const primaryNeonMat = new BABYLON.StandardMaterial(`${idPrefix}_priMat`, scene);
+                primaryNeonMat.emissiveColor = primaryColor;
+                primaryNeonMat.disableLighting = true;
+
+                const accentNeonMat = new BABYLON.StandardMaterial(`${idPrefix}_accMat`, scene);
+                accentNeonMat.emissiveColor = accentColor;
+                accentNeonMat.disableLighting = true;
+
+                const fuselage = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_fuselage`, {
+                    diameterTop: 0.08,
+                    diameterBottom: 1.25,
+                    height: 3.2,
+                    tessellation: 4
+                }, scene);
+                fuselage.rotation.x = Math.PI / 2;
+                fuselage.rotation.y = Math.PI / 4;
+                fuselage.scaling.y = 0.55;
+                fuselage.material = hullMat;
+                fuselage.parent = root;
+
+                const canopy = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_canopy`, {
+                    width: 0.34,
+                    height: 0.22,
+                    depth: 1.35
+                }, scene);
+                canopy.position.set(0, 0.24, 0.15);
+                canopy.material = primaryNeonMat;
+                canopy.parent = root;
+
+                [-1, 1].forEach(side => {
+                    const wing = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_wing_${side}`, {
+                        width: 1.35,
+                        height: 0.08,
+                        depth: 1.4
+                    }, scene);
+                    wing.position.set(side * 0.85, -0.04, -0.45);
+                    wing.rotation.y = side * -0.35;
+                    wing.rotation.z = side * -0.12;
+                    wing.material = hullMat;
+                    wing.parent = root;
+
+                    const blade = BABYLON.MeshBuilder.CreateBox(`${idPrefix}_blade_${side}`, {
+                        width: 0.1,
+                        height: 0.14,
+                        depth: 1.55
+                    }, scene);
+                    blade.position.set(side * 1.48, 0.02, -0.45);
+                    blade.material = primaryNeonMat;
+                    blade.parent = root;
+                });
+
+                [-0.32, 0.32].forEach((xOffset, idx) => {
+                    const thruster = BABYLON.MeshBuilder.CreateCylinder(`${idPrefix}_thruster_${idx}`, {
+                        diameter: 0.36,
+                        height: 0.35,
+                        tessellation: 12
+                    }, scene);
+                    thruster.rotation.x = Math.PI / 2;
+                    thruster.position.set(xOffset, 0.02, -1.55);
+                    thruster.material = accentNeonMat;
+                    thruster.parent = root;
+                });
+
+                // Energy Shield Sphere
+                const shieldBubble = BABYLON.MeshBuilder.CreateSphere(`${idPrefix}_shield`, {
+                    diameter: 3.6,
+                    segments: 16
+                }, scene);
+                const shieldMat = new BABYLON.StandardMaterial(`${idPrefix}_shieldMat`, scene);
+                shieldMat.emissiveColor = CONFIG.COLORS.GOLD;
+                shieldMat.alpha = 0.24;
+                shieldMat.wireframe = true;
+                shieldBubble.material = shieldMat;
+                shieldBubble.parent = root;
+                shieldBubble.setEnabled(false);
+
+                // Floating 3D Pilot Tag (Visible in Multiplayer Modes)
+                const nameTag = TextureFactory.createPilotNameTag(scene, tagLabel, tagHex);
+                nameTag.position.set(0, 1.35, 0);
+                nameTag.parent = root;
+                nameTag.setEnabled(false);
+
+                // Thruster Exhaust Particle System
+                const particles = this.createThrusterParticles(scene, root, primaryColor, accentColor);
+
+                return { root, shieldBubble, nameTag, particles };
+            }
+
+            createThrusterParticles(scene, emitterNode, color1, color2) {
+                const particleSystem = new BABYLON.ParticleSystem('thrusterParticles', 140, scene);
+                const pCanvas = document.createElement('canvas');
+                pCanvas.width = 32;
+                pCanvas.height = 32;
+                const pCtx = pCanvas.getContext('2d');
+                const grad = pCtx.createRadialGradient(16, 16, 2, 16, 16, 16);
+                grad.addColorStop(0, 'rgba(255,255,255,1)');
+                grad.addColorStop(0.4, 'rgba(0,243,255,0.8)');
+                grad.addColorStop(1, 'rgba(255,0,127,0)');
+                pCtx.fillStyle = grad;
+                pCtx.fillRect(0, 0, 32, 32);
+
+                particleSystem.particleTexture = new BABYLON.Texture(pCanvas.toDataURL(), scene);
+                particleSystem.emitter = emitterNode;
+                particleSystem.minEmitBox = new BABYLON.Vector3(-0.35, -0.05, -1.65);
+                particleSystem.maxEmitBox = new BABYLON.Vector3(0.35, 0.05, -1.65);
+
+                particleSystem.color1 = new BABYLON.Color4(color1.r, color1.g, color1.b, 1.0);
+                particleSystem.color2 = new BABYLON.Color4(color2.r, color2.g, color2.b, 1.0);
+                particleSystem.colorDead = new BABYLON.Color4(0.2, 0.0, 0.4, 0.0);
+
+                particleSystem.minSize = 0.16;
+                particleSystem.maxSize = 0.36;
+                particleSystem.minLifeTime = 0.14;
+                particleSystem.maxLifeTime = 0.30;
+                particleSystem.emitRate = 95;
+                particleSystem.direction1 = new BABYLON.Vector3(-0.3, -0.1, -12);
+                particleSystem.direction2 = new BABYLON.Vector3(0.3, 0.2, -16);
+                particleSystem.start();
+                return particleSystem;
+            }
+
+            /**
+             * ------------------------------------------------------------------------
+             * 5. SEEDED WAVE & OBSTACLE / COLLECTIBLE SPAWNING SYSTEM
+             * ------------------------------------------------------------------------
+             */
+            spawnWave() {
+                this.waveCounter++;
+                const lanes = [-4.2, 0, 4.2];
+                // Deterministic Fisher-Yates shuffle using SeededRNG
+                const shuffled = [...lanes];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(this.rng.next() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+
+                const patternType = this.rng.next();
+
+                if (patternType < 0.45) {
+                    this.spawnObstacle('BARRIER', shuffled[0], CONFIG.SPAWN_Z);
+                    this.spawnObstacle('BARRIER', shuffled[1], CONFIG.SPAWN_Z);
+                    this.spawnOrbLine(shuffled[2], CONFIG.SPAWN_Z, 3);
+                } else if (patternType < 0.78) {
+                    const hurdleLane = shuffled[0];
+                    this.spawnObstacle('LOW_LASER', hurdleLane, CONFIG.SPAWN_Z);
+                    this.spawnCollectible('ORB', hurdleLane, 2.5, CONFIG.SPAWN_Z);
+                    this.spawnObstacle('PYLON', shuffled[1], CONFIG.SPAWN_Z + 8);
+                } else {
+                    this.spawnObstacle('SPIN_GATE', shuffled[0], CONFIG.SPAWN_Z);
+                    this.spawnObstacle('BARRIER', shuffled[1], CONFIG.SPAWN_Z + 5);
+
+                    if (this.rng.next() < 0.32) {
+                        this.spawnCollectible('SHIELD', shuffled[2], 1.1, CONFIG.SPAWN_Z + 3);
+                    } else {
+                        this.spawnOrbLine(shuffled[2], CONFIG.SPAWN_Z, 4);
+                    }
+                }
+            }
+
+            spawnOrbLine(x, startZ, count) {
+                for (let i = 0; i < count; i++) {
+                    this.spawnCollectible('ORB', x, 1.0, startZ + i * 4.2);
+                }
+            }
+
+            spawnObstacle(type, x, z) {
+                const mat = new BABYLON.StandardMaterial(`obsMat_${this.waveCounter}_${Math.random()}`, this.scene);
+                mat.diffuseColor = new BABYLON.Color3(0.15, 0.02, 0.08);
+                mat.emissiveColor = CONFIG.COLORS.DANGER;
+
+                let mesh;
+                let halfExtents;
+
+                if (type === 'BARRIER') {
+                    mesh = BABYLON.MeshBuilder.CreateBox('barrier', { width: 3.1, height: 2.2, depth: 1.1 }, this.scene);
+                    mesh.position.set(x, 1.1, z);
+                    halfExtents = new BABYLON.Vector3(1.35, 1.0, 0.55);
+                } else if (type === 'LOW_LASER') {
+                    mesh = BABYLON.MeshBuilder.CreateCylinder('lowLaser', {
+                        diameter: 0.45,
+                        height: 3.6,
+                        tessellation: 12
+                    }, this.scene);
+                    mesh.rotation.z = Math.PI / 2;
+                    mesh.position.set(x, 0.65, z);
+                    mat.emissiveColor = CONFIG.COLORS.PINK;
+                    halfExtents = new BABYLON.Vector3(1.6, 0.45, 0.4);
+                } else if (type === 'SPIN_GATE') {
+                    mesh = BABYLON.MeshBuilder.CreateTorus('spinGate', {
+                        diameter: 3.4,
+                        thickness: 0.35,
+                        tessellation: 24
+                    }, this.scene);
+                    mesh.position.set(x, 1.8, z);
+                    mat.emissiveColor = CONFIG.COLORS.PURPLE;
+                    halfExtents = new BABYLON.Vector3(1.25, 1.25, 0.45);
+                } else {
+                    mesh = BABYLON.MeshBuilder.CreateCylinder('pylon', {
+                        diameterTop: 0.2,
+                        diameterBottom: 1.8,
+                        height: 3.8,
+                        tessellation: 6
+                    }, this.scene);
+                    mesh.position.set(x, 1.9, z);
+                    halfExtents = new BABYLON.Vector3(0.75, 1.8, 0.75);
+                }
+
+                mesh.material = mat;
+                this.entities.push({
+                    kind: 'OBSTACLE',
+                    subType: type,
+                    mesh,
+                    halfExtents
+                });
+            }
+
+            spawnCollectible(type, x, y, z) {
+                const mat = new BABYLON.StandardMaterial(`colMat_${this.waveCounter}_${Math.random()}`, this.scene);
+                let mesh;
+
+                if (type === 'ORB') {
+                    mesh = BABYLON.MeshBuilder.CreatePolyhedron('energyOrb', { type: 1, size: 0.55 }, this.scene);
+                    mat.emissiveColor = CONFIG.COLORS.CYAN;
+                    mat.diffuseColor = CONFIG.COLORS.CYAN;
+                } else {
+                    mesh = BABYLON.MeshBuilder.CreateTorus('shieldPickup', {
+                        diameter: 1.45,
+                        thickness: 0.22,
+                        tessellation: 20
+                    }, this.scene);
+                    mat.emissiveColor = CONFIG.COLORS.GOLD;
+                    mat.diffuseColor = CONFIG.COLORS.GOLD;
+                }
+
+                mesh.position.set(x, y, z);
+                mesh.material = mat;
+
+                this.entities.push({
+                    kind: 'COLLECTIBLE',
+                    subType: type,
+                    mesh,
+                    radius: type === 'SHIELD' ? 1.25 : 1.05
+                });
+            }
+
+            /**
+             * ------------------------------------------------------------------------
+             * 6. MAIN SIMULATION, DUAL-PILOT PHYSICS & ONLINE SYNC LOOP
+             * ------------------------------------------------------------------------
+             */
+            update(dt) {
+                const activeSpeed = this.state === 'GAMEOVER' ? 0 : this.speed;
+                this.gridOffsetV += (activeSpeed * dt) * 0.128;
+                this.gridTexture.vOffset = -this.gridOffsetV;
+
+                this.horizonPillars.forEach(p => {
+                    p.position.z -= activeSpeed * dt;
+                    if (p.position.z < -15) {
+                        p.position.z += 210;
+                    }
+                });
+
+                // Spin active shield bubbles
+                [
+                    { pilot: this.p1, rig: this.p1Rig },
+                    { pilot: this.p2, rig: this.p2Rig }
+                ].forEach(({ pilot, rig }) => {
+                    if (pilot.hasShield && rig.shieldBubble) {
+                        rig.shieldBubble.rotation.y += dt * 2.2;
+                        rig.shieldBubble.rotation.x += dt * 1.1;
+                    }
+                });
+
+                if (this.state === 'MENU') {
+                    const t = performance.now() * 0.0015;
+                    this.p1.pos.x = Math.sin(t) * 2.8;
+                    this.p1.pos.y = 0.85 + Math.sin(t * 2.5) * 0.18;
+                    this.p1Rig.root.position.copyFrom(this.p1.pos);
+                    this.p1Rig.root.rotation.z = -Math.cos(t) * 0.28;
+                    this.p1Rig.root.rotation.x = Math.cos(t * 2.5) * 0.06;
+                } else if (this.state === 'PLAYING') {
+                    this.updatePlaying(dt);
+                }
+
+                this.updateCamera(dt);
+            }
+
+            updatePlaying(dt) {
+                // 1. Progressive Speed Acceleration
+                this.speed = Math.min(CONFIG.MAX_SPEED, this.speed + CONFIG.SPEED_ACCEL * dt);
+
+                // 2. Update Local Pilot 1 (Always controlled locally)
+                if (this.p1.alive) {
+                    this.p1.score += (this.speed * dt * 1.8) * (1 + (this.p1.combo - 1) * 0.15);
+                    const p1Dir = (this.keys.p1Right ? 1 : 0) - (this.keys.p1Left ? 1 : 0);
+                    this.stepPilotPhysics(this.p1, this.p1Rig, p1Dir, dt);
+                }
+
+                // 3. Update Pilot 2 (Local Dual-Pilot OR Smooth Online Remote Interpolation)
+                if (this.gameMode === 'LOCAL_2P' && this.p2.alive) {
+                    this.p2.score += (this.speed * dt * 1.8) * (1 + (this.p2.combo - 1) * 0.15);
+                    const p2Dir = (this.keys.p2Right ? 1 : 0) - (this.keys.p2Left ? 1 : 0);
+                    this.stepPilotPhysics(this.p2, this.p2Rig, p2Dir, dt);
+                } else if (this.gameMode === 'ONLINE' && this.p2.active) {
+                    // Smoothly interpolate remote rival hovercraft telemetry
+                    this.p2.pos.x = BABYLON.Scalar.Lerp(this.p2.pos.x, this.p2Target.x, dt * 14);
+                    this.p2.pos.y = BABYLON.Scalar.Lerp(this.p2.pos.y, this.p2Target.y, dt * 14);
+                    this.p2Rig.root.position.copyFrom(this.p2.pos);
+                    this.p2Rig.root.rotation.z = BABYLON.Scalar.Lerp(this.p2Rig.root.rotation.z, this.p2Target.tiltZ, dt * 12);
+                    this.p2Rig.shieldBubble.setEnabled(this.p2.hasShield);
+                    this.p2Rig.root.setEnabled(this.p2.alive);
+
+                    // Push our own local telemetry to Firestore
+                    this.arena.pushTelemetry({
+                        x: this.p1.pos.x,
+                        y: this.p1.pos.y,
+                        tiltZ: this.p1Rig.root.rotation.z,
+                        score: this.p1.score,
+                        alive: this.p1.alive,
+                        shield: this.p1.hasShield
+                    });
+                }
+
+                // 4. Wave Spawning Timer
+                this.spawnTimer -= dt;
+                if (this.spawnTimer <= 0) {
+                    this.spawnWave();
+                    const speedRatio = (this.speed - CONFIG.BASE_SPEED) / (CONFIG.MAX_SPEED - CONFIG.BASE_SPEED);
+                    this.spawnTimer = Math.max(0.68, 1.35 - speedRatio * 0.55);
+                }
+
+                // 5. Update Entities & Check Collisions
+                const playerHalf = new BABYLON.Vector3(0.62, 0.38, 1.12);
+
+                for (let i = this.entities.length - 1; i >= 0; i--) {
+                    const ent = this.entities[i];
+                    ent.mesh.position.z -= this.speed * dt;
+
+                    if (ent.subType === 'SPIN_GATE') {
+                        ent.mesh.rotation.z += dt * 2.4;
+                    } else if (ent.kind === 'COLLECTIBLE') {
+                        ent.mesh.rotation.y += dt * 3.2;
+                        if (ent.subType === 'SHIELD') {
+                            ent.mesh.rotation.x += dt * 1.8;
+                        }
+                    }
+
+                    let consumed = false;
+
+                    // Check Pilot 1 Collisions
+                    if (this.p1.alive) {
+                        consumed = this.evaluatePilotCollision(this.p1, this.p1Rig, ent, playerHalf, true);
+                    }
+
+                    // Check Pilot 2 Collisions (Only in 2P Local Mode; Online rival evaluates their own)
+                    if (!consumed && this.gameMode === 'LOCAL_2P' && this.p2.alive) {
+                        consumed = this.evaluatePilotCollision(this.p2, this.p2Rig, ent, playerHalf, false);
+                    }
+
+                    if (consumed || ent.mesh.position.z < CONFIG.DESPAWN_Z) {
+                        ent.mesh.dispose();
+                        this.entities.splice(i, 1);
+                    }
+                }
+
+                this.updateHUD();
+            }
+
+            stepPilotPhysics(pilot, rig, moveDir, dt) {
+                if (moveDir !== 0) {
+                    pilot.pos.x += moveDir * CONFIG.STEER_SPEED * dt;
+                    pilot.targetTiltZ = -moveDir * 0.42;
+                } else {
+                    pilot.targetTiltZ = 0;
+                }
+
+                pilot.pos.x = Math.max(-CONFIG.PLAYER_X_LIMIT, Math.min(CONFIG.PLAYER_X_LIMIT, pilot.pos.x));
+
+                if (!pilot.isGrounded) {
+                    pilot.velY -= CONFIG.GRAVITY * dt;
+                    pilot.pos.y += pilot.velY * dt;
+                    pilot.targetPitchX = -pilot.velY * 0.018;
+
+                    if (pilot.pos.y <= 0.75) {
+                        pilot.pos.y = 0.75;
+                        pilot.velY = 0;
+                        pilot.isGrounded = true;
+                        pilot.targetPitchX = 0;
+                    }
+                } else {
+                    pilot.pos.y = 0.75 + Math.sin(performance.now() * 0.01) * 0.06;
+                    pilot.targetPitchX = 0;
+                }
+
+                rig.root.position.copyFrom(pilot.pos);
+                rig.root.rotation.z = BABYLON.Scalar.Lerp(rig.root.rotation.z, pilot.targetTiltZ, dt * 12);
+                rig.root.rotation.x = BABYLON.Scalar.Lerp(rig.root.rotation.x, pilot.targetPitchX, dt * 10);
+            }
+
+            evaluatePilotCollision(pilot, rig, ent, playerHalf, isPrimary) {
+                if (ent.kind === 'COLLECTIBLE') {
+                    const dist = BABYLON.Vector3.Distance(pilot.pos, ent.mesh.position);
+                    if (dist < ent.radius + 0.85) {
+                        if (ent.subType === 'ORB') {
+                            pilot.combo = Math.min(25, pilot.combo + 1);
+                            pilot.maxCombo = Math.max(pilot.maxCombo, pilot.combo);
+                            const bonus = 100 * pilot.combo;
+                            pilot.score += bonus;
+                            this.audio.playPickup(pilot.combo);
+                            this.triggerFlash(isPrimary ? 'bg-cyan-400' : 'bg-pink-400', 0.14);
+                        } else if (ent.subType === 'SHIELD') {
+                            pilot.hasShield = true;
+                            rig.shieldBubble.setEnabled(true);
+                            pilot.score += 500;
+                            this.audio.playShieldPickup();
+                            this.triggerFlash('bg-amber-400', 0.22);
+                            this.showCallout(`${isPrimary ? 'P1' : 'P2'} AEGIS SHIELD ONLINE`, 'text-amber-300');
+                        }
+                        return true;
+                    }
+                } else if (ent.kind === 'OBSTACLE') {
+                    const dx = Math.abs(pilot.pos.x - ent.mesh.position.x);
+                    const dy = Math.abs(pilot.pos.y - ent.mesh.position.y);
+                    const dz = Math.abs(pilot.pos.z - ent.mesh.position.z);
+
+                    if (
+                        dx < (playerHalf.x + ent.halfExtents.x) &&
+                        dy < (playerHalf.y + ent.halfExtents.y) &&
+                        dz < (playerHalf.z + ent.halfExtents.z)
+                    ) {
+                        if (pilot.hasShield) {
+                            pilot.hasShield = false;
+                            rig.shieldBubble.setEnabled(false);
+                            this.audio.playShieldBreak();
+                            this.triggerFlash('bg-amber-500', 0.32);
+                            this.showCallout('SHIELD IMPACT ABSORBED!', 'text-amber-300');
+                            return true; // Destroys obstacle
+                        } else {
+                            this.handlePilotCrash(pilot, rig, isPrimary);
+                            return false;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            handlePilotCrash(pilot, rig, isPrimary) {
+                pilot.alive = false;
+                rig.root.setEnabled(false);
+                this.audio.playCrash();
+                this.triggerFlash('bg-rose-600', 0.45);
+
+                if (this.gameMode === 'SOLO') {
+                    this.triggerGameOver('SYSTEM CRASH', 'Hull Integrity Compromised');
+                } else if (this.gameMode === 'LOCAL_2P') {
+                    if (!this.p1.alive && !this.p2.alive) {
+                        const p1Wins = this.p1.score >= this.p2.score;
+                        this.triggerGameOver(
+                            p1Wins ? 'P1 CYAN WINS!' : 'P2 VIPER WINS!',
+                            'Dual-Pilot Duel Complete'
+                        );
+                    } else {
+                        this.showCallout(
+                            isPrimary ? 'P1 CRASHED! P2 STILL RACING!' : 'P2 CRASHED! P1 STILL RACING!',
+                            'text-rose-400'
+                        );
+                    }
+                } else if (this.gameMode === 'ONLINE') {
+                    // Push final crash telemetry immediately
+                    this.arena.pushTelemetry({
+                        x: this.p1.pos.x,
+                        y: this.p1.pos.y,
+                        tiltZ: 0,
+                        score: this.p1.score,
+                        alive: false,
+                        shield: false
+                    }, true);
+
+                    if (!this.p2.alive) {
+                        const weWon = this.p1.score >= this.p2.score;
+                        this.triggerGameOver(
+                            weWon ? 'ARENA VICTORY!' : 'RIVAL WON ARENA!',
+                            'Online Cyber Race Complete'
+                        );
+                    } else {
+                        this.showCallout('YOU CRASHED! WATCHING RIVAL FINISH...', 'text-rose-400');
+                    }
+                }
+            }
+
+            updateCamera(dt) {
+                const focusX = (this.gameMode === 'LOCAL_2P' && this.p1.alive && this.p2.alive)
+                    ? (this.p1.pos.x + this.p2.pos.x) * 0.35
+                    : (this.p1.alive ? this.p1.pos.x : this.p2.pos.x) * 0.55;
+
+                const focusY = this.p1.alive ? this.p1.pos.y : this.p2.pos.y;
+
+                if (this.cameraMode === 'SHOWCASE_ORBIT') {
+                    this.orbitAngle += dt * 0.65;
+                    const radius = 9.2;
+                    const camX = focusX + Math.sin(this.orbitAngle) * radius;
+                    const camZ = -Math.cos(this.orbitAngle) * radius;
+                    this.camera.position.x = BABYLON.Scalar.Lerp(this.camera.position.x, camX, dt * 5);
+                    this.camera.position.y = BABYLON.Scalar.Lerp(this.camera.position.y, focusY + 3.4, dt * 5);
+                    this.camera.position.z = BABYLON.Scalar.Lerp(this.camera.position.z, camZ, dt * 5);
+                    this.camera.setTarget(new BABYLON.Vector3(focusX, focusY + 0.6, 2));
+                } else {
+                    const targetCamY = 4.4 + (focusY - 0.75) * 0.45;
+                    this.camera.position.x = BABYLON.Scalar.Lerp(this.camera.position.x, focusX, dt * 8);
+                    this.camera.position.y = BABYLON.Scalar.Lerp(this.camera.position.y, targetCamY, dt * 8);
+                    this.camera.position.z = BABYLON.Scalar.Lerp(this.camera.position.z, -11.4, dt * 6);
+
+                    const speedRatio = (this.speed - CONFIG.BASE_SPEED) / (CONFIG.MAX_SPEED - CONFIG.BASE_SPEED);
+                    this.camera.fov = BABYLON.Scalar.Lerp(this.camera.fov, 0.84 + speedRatio * 0.22, dt * 4);
+                    this.camera.setTarget(new BABYLON.Vector3(focusX * 0.6, 1.6, 18));
+                }
+            }
+
+            triggerPilotJump(pilot) {
+                if (this.state !== 'PLAYING' || !pilot.alive) return;
+                if (pilot.isGrounded) {
+                    pilot.velY = CONFIG.JUMP_FORCE;
+                    pilot.isGrounded = false;
+                    this.audio.playJump();
+                }
+            }
+
+            /**
+             * ------------------------------------------------------------------------
+             * 7. MATCH LIFECYCLE (SOLO, 2P LOCAL, ONLINE ARENA)
+             * ------------------------------------------------------------------------
+             */
+            startMatch(mode, customSeed = null) {
+                this.audio.init();
+                this.audio.startPulse();
+
+                this.gameMode = mode;
+                this.state = 'PLAYING';
+                this.cameraMode = 'CHASE';
+                document.getElementById('camModeLabel').textContent = 'CHASE CAM';
+
+                // Set Deterministic Course Seed
+                const seed = customSeed !== null ? customSeed : Math.floor(Math.random() * 900000) + 100000;
+                this.rng.setSeed(seed);
+
+                this.speed = CONFIG.BASE_SPEED;
+                this.waveCounter = 0;
+
+                // Configure Pilot 1
+                const p1StartX = mode === 'SOLO' ? 0 : -2.2;
+                this.p1 = this.createPilotState(p1StartX, true);
+                this.p1Rig.root.setEnabled(true);
+                this.p1Rig.root.position.copyFrom(this.p1.pos);
+                this.p1Rig.root.rotation.set(0, 0, 0);
+                this.p1Rig.shieldBubble.setEnabled(false);
+                this.p1Rig.nameTag.setEnabled(mode !== 'SOLO');
+
+                // Configure Pilot 2 / Rival
+                const isMulti = mode === 'LOCAL_2P' || mode === 'ONLINE';
+                this.p2 = this.createPilotState(2.2, isMulti);
+                this.p2Target = { x: 2.2, y: 0.75, tiltZ: 0 };
+                this.p2Rig.root.setEnabled(isMulti);
+                this.p2Rig.root.position.copyFrom(this.p2.pos);
+                this.p2Rig.root.rotation.set(0, 0, 0);
+                this.p2Rig.shieldBubble.setEnabled(false);
+                this.p2Rig.nameTag.setEnabled(isMulti);
+
+                // Reset Entities
+                this.entities.forEach(e => e.mesh.dispose());
+                this.entities = [];
+                this.spawnTimer = 0.4;
+
+                // Configure HUD Badges for Mode
+                document.getElementById('startScreen').classList.add('hidden');
+                document.getElementById('onlineLobbyScreen').classList.add('hidden');
+                document.getElementById('gameOverScreen').classList.add('hidden');
+                document.getElementById('hudLeft').classList.remove('opacity-0');
+                document.getElementById('mobileHint').classList.remove('opacity-0');
+
+                const rivalCard = document.getElementById('rivalHudCard');
+                const roomBadge = document.getElementById('activeRoomBadge');
+
+                if (mode === 'SOLO') {
+                    document.getElementById('p1Label').textContent = 'Score';
+                    rivalCard.classList.add('hidden');
+                    roomBadge.classList.add('hidden');
+                    document.getElementById('mobileHintText').textContent = 'Swipe Left/Right to Steer • Tap or Swipe Up to Jump';
+                } else if (mode === 'LOCAL_2P') {
+                    document.getElementById('p1Label').textContent = 'P1 • CYAN';
+                    document.getElementById('rivalHudLabel').textContent = 'P2 • VIPER';
+                    rivalCard.classList.remove('hidden');
+                    roomBadge.classList.add('hidden');
+                    document.getElementById('mobileHintText').textContent = 'P1: A/D + W/Space  |  P2: Left/Right Arrows + Up Arrow';
+                } else if (mode === 'ONLINE') {
+                    document.getElementById('p1Label').textContent = 'YOU • CYAN';
+                    document.getElementById('rivalHudLabel').textContent = 'RIVAL • VIPER';
+                    rivalCard.classList.remove('hidden');
+                    roomBadge.classList.remove('hidden');
+                    document.getElementById('activeRoomCodeText').textContent = this.arena.roomCode || '----';
+                    document.getElementById('mobileHintText').textContent = 'Live Online Sync Active • Outlast Your Rival!';
+                }
+
+                this.updateHUD();
+            }
+
+            handleOnlineRoomUpdate(roomData, role) {
+                if (!roomData) return;
+
+                // Update Lobby UI if waiting
+                const guestNameEl = document.getElementById('guestPilotName');
+                const startOnlineBtn = document.getElementById('startOnlineMatchBtn');
+
+                if (roomData.guest) {
+                    guestNameEl.textContent = roomData.guest.name || 'CRIMSON VIPER';
+                    guestNameEl.classList.remove('text-slate-400');
+                    guestNameEl.classList.add('text-rose-300');
+
+                    if (role === 'HOST') {
+                        startOnlineBtn.disabled = false;
+                        startOnlineBtn.textContent = '▶ LAUNCH ONLINE RACE';
+                        startOnlineBtn.className = 'neon-btn w-full py-3.5 rounded-xl font-display font-black text-sm tracking-widest text-white uppercase cursor-pointer';
+                    } else {
+                        startOnlineBtn.textContent = 'RIVAL JOINED! WAITING FOR HOST TO LAUNCH...';
+                    }
+                }
+
+                // Trigger synchronized race start when host launches
+                if (roomData.status === 'RACING' && this.state !== 'PLAYING') {
+                    this.startMatch('ONLINE', roomData.seed);
+                    this.showCallout(`ARENA ROOM ${roomData.roomCode} • GO!`, 'text-emerald-300');
+                    return;
+                }
+
+                // Sync remote opponent telemetry during active race
+                if (this.gameMode === 'ONLINE' && this.state === 'PLAYING') {
+                    const rivalData = role === 'HOST' ? roomData.guest : roomData.host;
+                    if (rivalData) {
+                        this.p2Target.x = rivalData.x ?? 2.2;
+                        this.p2Target.y = rivalData.y ?? 0.75;
+                        this.p2Target.tiltZ = rivalData.tiltZ ?? 0;
+                        this.p2.score = rivalData.score ?? 0;
+                        this.p2.hasShield = Boolean(rivalData.shield);
+
+                        const wasAlive = this.p2.alive;
+                        this.p2.alive = rivalData.alive !== false;
+
+                        if (wasAlive && !this.p2.alive) {
+                            if (!this.p1.alive) {
+                                const weWon = this.p1.score >= this.p2.score;
+                                this.triggerGameOver(
+                                    weWon ? 'ARENA VICTORY!' : 'RIVAL WON ARENA!',
+                                    'Online Cyber Race Complete'
+                                );
+                            } else {
+                                this.showCallout('RIVAL CRASHED! KEEP DRIVING FOR HIGH SCORE!', 'text-emerald-300');
+                            }
+                        }
+                    }
+                }
+            }
+
+            triggerGameOver(titleText, subtitleText) {
+                this.state = 'GAMEOVER';
+                this.audio.stopPulse();
+
+                const p1ScoreInt = Math.floor(this.p1.score);
+                const p2ScoreInt = Math.floor(this.p2.score);
+                const topRunScore = Math.max(p1ScoreInt, this.gameMode === 'LOCAL_2P' ? p2ScoreInt : 0);
+
+                if (topRunScore > this.highScore) {
+                    this.highScore = topRunScore;
+                    localStorage.setItem('neonDriftHighScore', String(this.highScore));
+                }
+
+                document.getElementById('gameOverTitle').textContent = titleText;
+                document.getElementById('gameOverSubtitle').textContent = subtitleText;
+
+                if (this.gameMode === 'SOLO') {
+                    document.getElementById('finalP1Label').textContent = 'Final Score';
+                    document.getElementById('finalScoreText').textContent = p1ScoreInt.toLocaleString();
+                    document.getElementById('finalP2Label').textContent = 'Max Combo';
+                    document.getElementById('finalComboText').textContent = `x${this.p1.maxCombo}`;
+                } else {
+                    document.getElementById('finalP1Label').textContent = this.gameMode === 'ONLINE' ? 'Your Score' : 'P1 Cyan Score';
+                    document.getElementById('finalScoreText').textContent = p1ScoreInt.toLocaleString();
+                    document.getElementById('finalP2Label').textContent = this.gameMode === 'ONLINE' ? 'Rival Score' : 'P2 Viper Score';
+                    document.getElementById('finalComboText').textContent = p2ScoreInt.toLocaleString();
+                }
+
+                document.getElementById('finalBestText').textContent = this.highScore.toLocaleString();
+                document.getElementById('mobileHint').classList.add('opacity-0');
+                document.getElementById('gameOverScreen').classList.remove('hidden');
+                this.updateHUD();
+            }
+
+            /**
+             * ------------------------------------------------------------------------
+             * 8. HUD, VISUAL FEEDBACK & INPUT EVENT BINDINGS
+             * ------------------------------------------------------------------------
+             */
+            updateHUD() {
+                const p1ScoreStr = String(Math.floor(this.p1.score)).padStart(6, '0');
+                const p2ScoreStr = String(Math.floor(this.p2.score)).padStart(6, '0');
+                const bestStr = String(Math.max(this.highScore, Math.floor(this.p1.score))).padStart(6, '0');
+
+                document.getElementById('scoreDisplay').textContent = p1ScoreStr;
+                document.getElementById('rivalScoreDisplay').textContent = p2ScoreStr;
+                document.getElementById('highScoreDisplay').textContent = bestStr;
+                document.getElementById('comboDisplay').textContent = `x${this.p1.combo}`;
+                document.getElementById('speedDisplay').textContent = Math.round(this.speed * 5.8);
+
+                const shieldBadge = document.getElementById('shieldBadge');
+                if (this.p1.hasShield) {
+                    shieldBadge.classList.remove('hidden');
+                } else {
+                    shieldBadge.classList.add('hidden');
+                }
+            }
+
+            triggerFlash(bgClass, opacity) {
+                const flash = document.getElementById('screenFlash');
+                flash.className = `fixed inset-0 z-10 transition-opacity duration-150 ${bgClass}`;
+                flash.style.opacity = String(opacity);
+                setTimeout(() => {
+                    flash.style.opacity = '0';
+                }, 90);
+            }
+
+            showCallout(text, colorClass) {
+                const el = document.getElementById('floatingCallout');
+                el.textContent = text;
+                el.className = `fixed top-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none transition-all duration-300 font-display text-base sm:text-2xl font-black tracking-widest ${colorClass} text-glow-cyan opacity-100 scale-105 text-center px-4`;
+                clearTimeout(this.calloutTimeout);
+                this.calloutTimeout = setTimeout(() => {
+                    el.classList.remove('opacity-100', 'scale-105');
+                    el.classList.add('opacity-0', 'scale-95');
+                }, 1150);
+            }
+
+            bindUI() {
+                // Main Menu Mode Launchers
+                document.getElementById('playSoloBtn').addEventListener('click', () => this.startMatch('SOLO'));
+                document.getElementById('playLocal2PBtn').addEventListener('click', () => this.startMatch('LOCAL_2P'));
+
+                // Online Lobby Navigation
+                document.getElementById('openOnlineLobbyBtn').addEventListener('click', () => {
+                    this.audio.init();
+                    document.getElementById('startScreen').classList.add('hidden');
+                    document.getElementById('onlineLobbyScreen').classList.remove('hidden');
+                    document.getElementById('lobbyErrorMsg').classList.add('hidden');
+                });
+
+                document.getElementById('backFromLobbyBtn').addEventListener('click', () => {
+                    this.arena.leaveRoom();
+                    document.getElementById('onlineLobbyScreen').classList.add('hidden');
+                    document.getElementById('lobbyControlsBox').classList.remove('hidden');
+                    document.getElementById('waitingRoomBox').classList.add('hidden');
+                    document.getElementById('startScreen').classList.remove('hidden');
+                });
+
+                document.getElementById('createRoomBtn').addEventListener('click', async () => {
+                    const errEl = document.getElementById('lobbyErrorMsg');
+                    errEl.classList.add('hidden');
+                    try {
+                        const room = await this.arena.createRoom();
+                        document.getElementById('lobbyControlsBox').classList.add('hidden');
+                        document.getElementById('waitingRoomBox').classList.remove('hidden');
+                        document.getElementById('lobbyRoomCode').textContent = room.roomCode;
+                    } catch (err) {
+                        errEl.textContent = err.message;
+                        errEl.classList.remove('hidden');
+                    }
+                });
+
+                document.getElementById('joinRoomBtn').addEventListener('click', async () => {
+                    const errEl = document.getElementById('lobbyErrorMsg');
+                    errEl.classList.add('hidden');
+                    const code = document.getElementById('joinCodeInput').value;
+                    try {
+                        const room = await this.arena.joinRoom(code);
+                        document.getElementById('lobbyControlsBox').classList.add('hidden');
+                        document.getElementById('waitingRoomBox').classList.remove('hidden');
+                        document.getElementById('lobbyRoomCode').textContent = room.roomCode;
+                        document.getElementById('guestPilotName').textContent = 'CRIMSON VIPER (YOU)';
+                        document.getElementById('guestPilotName').classList.remove('text-slate-400');
+                        document.getElementById('guestPilotName').classList.add('text-rose-300');
+                        document.getElementById('startOnlineMatchBtn').textContent = 'CONNECTED! WAITING FOR HOST TO START...';
+                    } catch (err) {
+                        errEl.textContent = err.message;
+                        errEl.classList.remove('hidden');
+                    }
+                });
+
+                document.getElementById('copyRoomCodeBtn').addEventListener('click', () => {
+                    const code = document.getElementById('lobbyRoomCode').textContent;
+                    const tempInput = document.createElement('input');
+                    tempInput.value = code;
+                    document.body.appendChild(tempInput);
+                    tempInput.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(tempInput);
+                    document.getElementById('copyRoomCodeBtn').textContent = 'COPIED!';
+                    setTimeout(() => {
+                        document.getElementById('copyRoomCodeBtn').textContent = 'Copy';
+                    }, 1400);
+                });
+
+                document.getElementById('startOnlineMatchBtn').addEventListener('click', () => {
+                    this.arena.triggerMatchStart();
+                });
+
+                // Game Over Actions
+                document.getElementById('playAgainBtn').addEventListener('click', () => {
+                    if (this.gameMode === 'ONLINE') {
+                        if (this.arena.role === 'HOST') {
+                            const nextSeed = Math.floor(Math.random() * 900000) + 100000;
+                            this.arena.triggerMatchStart(nextSeed);
+                        } else {
+                            this.showCallout('WAITING FOR HOST TO RESTART ARENA...', 'text-amber-300');
+                        }
+                    } else {
+                        this.startMatch(this.gameMode);
+                    }
+                });
+
+                document.getElementById('returnMenuBtn').addEventListener('click', () => {
+                    this.arena.leaveRoom();
+                    this.state = 'MENU';
+                    this.p1Rig.root.setEnabled(true);
+                    this.p2Rig.root.setEnabled(false);
+                    document.getElementById('gameOverScreen').classList.add('hidden');
+                    document.getElementById('hudLeft').classList.add('opacity-0');
+                    document.getElementById('activeRoomBadge').classList.add('hidden');
+                    document.getElementById('startScreen').classList.remove('hidden');
+                });
+
+                // Showcase Camera Mode Toggle
+                document.getElementById('cameraToggleBtn').addEventListener('click', () => {
+                    this.cameraMode = this.cameraMode === 'CHASE' ? 'SHOWCASE_ORBIT' : 'CHASE';
+                    document.getElementById('camModeLabel').textContent =
+                        this.cameraMode === 'CHASE' ? 'CHASE CAM' : 'ORBIT CAM';
+                });
+
+                document.getElementById('showcaseOrbitBtn').addEventListener('click', () => {
+                    this.audio.init();
+                    this.cameraMode = 'SHOWCASE_ORBIT';
+                    document.getElementById('camModeLabel').textContent = 'ORBIT CAM';
+                    document.getElementById('startScreen').classList.add('hidden');
+                    document.getElementById('hudLeft').classList.remove('opacity-0');
+                    this.showCallout('360° ORBIT SHOWCASE • PRESS SPACE FOR SOLO', 'text-pink-300');
+                });
+
+                // Audio Mute Toggle
+                document.getElementById('audioToggleBtn').addEventListener('click', () => {
+                    this.audio.init();
+                    const muted = this.audio.toggleMute();
+                    document.getElementById('iconSoundOn').classList.toggle('hidden', muted);
+                    document.getElementById('iconSoundOff').classList.toggle('hidden', !muted);
+                });
+            }
+
+            bindInputs() {
+                window.addEventListener('keydown', (e) => {
+                    if (this.gameMode === 'LOCAL_2P') {
+                        // Separate Dual-Pilot Key Bindings for 2P Local Duel
+                        if (e.code === 'KeyA') this.keys.p1Left = true;
+                        if (e.code === 'KeyD') this.keys.p1Right = true;
+                        if (e.code === 'KeyW' || e.code === 'Space') this.triggerPilotJump(this.p1);
+
+                        if (e.code === 'ArrowLeft') this.keys.p2Left = true;
+                        if (e.code === 'ArrowRight') this.keys.p2Right = true;
+                        if (e.code === 'ArrowUp') this.triggerPilotJump(this.p2);
+                    } else {
+                        // Unified Single-Pilot Controls (A/D or Arrow Keys) for Solo & Online Arena
+                        if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.keys.p1Left = true;
+                        if (e.code === 'ArrowRight' || e.code === 'KeyD') this.keys.p1Right = true;
+                        if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+                            if (this.state === 'MENU') {
+                                this.startMatch('SOLO');
+                            } else {
+                                this.triggerPilotJump(this.p1);
+                            }
+                        }
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    if (this.gameMode === 'LOCAL_2P') {
+                        if (e.code === 'KeyA') this.keys.p1Left = false;
+                        if (e.code === 'KeyD') this.keys.p1Right = false;
+                        if (e.code === 'ArrowLeft') this.keys.p2Left = false;
+                        if (e.code === 'ArrowRight') this.keys.p2Right = false;
+                    } else {
+                        if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.keys.p1Left = false;
+                        if (e.code === 'ArrowRight' || e.code === 'KeyD') this.keys.p1Right = false;
+                    }
+                });
+
+                // Touch & Pointer Drag Steering + Jump for Primary Pilot
+                this.canvas.addEventListener('pointerdown', (e) => {
+                    this.pointerDown = true;
+                    this.lastPointerX = e.clientX;
+                    this.pointerStartY = e.clientY;
+                    this.pointerStartTime = performance.now();
+                });
+
+                window.addEventListener('pointermove', (e) => {
+                    if (!this.pointerDown || this.state !== 'PLAYING' || !this.p1.alive) return;
+                    const deltaX = e.clientX - this.lastPointerX;
+                    this.lastPointerX = e.clientX;
+
+                    const sensitivity = (CONFIG.TRACK_WIDTH / Math.max(window.innerWidth, 360)) * 1.45;
+                    this.p1.pos.x += deltaX * sensitivity;
+                    this.p1.targetTiltZ = Math.max(-0.48, Math.min(0.48, -deltaX * 0.035));
+                });
+
+                window.addEventListener('pointerup', (e) => {
+                    if (!this.pointerDown) return;
+                    this.pointerDown = false;
+
+                    const dy = this.pointerStartY - e.clientY;
+                    const elapsed = performance.now() - this.pointerStartTime;
+
+                    if (this.state === 'PLAYING' && (dy > 35 || (elapsed < 220 && Math.abs(dy) < 15))) {
+                        this.triggerPilotJump(this.p1);
+                    }
+                });
+            }
+        }
+
+        // Boot Application on Window Load
+        window.addEventListener('load', () => {
+            window.cyberRunner = new CyberRunnerApp();
+        });
+    </script>
+</body>
+</html>
